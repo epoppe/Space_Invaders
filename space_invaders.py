@@ -526,7 +526,15 @@ class LevelConfigs:
                 "speed_multiplier": 1.6,
                 "classic_movement": False,
                 "descent_step": 10,
-                "descent_speed_multiplier": 1.0
+                "descent_speed_multiplier": 1.0,
+                "spiral_rotation": True,  # Aktiver rotasjon for spiralformasjonen
+                "rotation_speed": 0.005,  # Hastighet for rotasjon
+                "movement_pattern": "circular",  # Beveger seg i en sirkel
+                "movement_speed_x": 0.5,  # Hastighet for horisontal bevegelse
+                "movement_speed_y": 0.3,  # Hastighet for vertikal bevegelse
+                "movement_amplitude_x": 100,  # Amplitude for horisontal bevegelse
+                "movement_amplitude_y": 50,  # Amplitude for vertikal bevegelse (mindre enn X for å unngå å gå for langt ned)
+                "center_y_limit": 250  # Begrenser hvor langt ned formasjonen kan gå
             },
             # Level 6 - Random scattered formation (tidligere level 5)
             {
@@ -578,15 +586,25 @@ class LevelConfigs:
         # Apply difficulty scaling for repeated levels
         if level_num > self.max_level:
             cycle = (level_num - 1) // self.max_level
-            # Increase speed multiplier by 10% for each cycle through all levels
-            config["speed_multiplier"] *= (1.1 ** cycle)
+            # Doble hastigheten for hver fullførte syklus (alle 7 nivåer)
+            config["speed_multiplier"] *= (2.0 ** cycle)
             
-            # Increase shooting and diving chances
-            config["shoot_chance"] *= (1.1 ** cycle)
-            config["dive_chance"] *= (1.1 ** cycle)
+            # Gjør navnet klarere for gjentatte nivåer
+            original_name = config["name"]
+            config["name"] = f"{original_name} +{cycle}"
             
-            # Cap the max divers to a reasonable number
-            config["max_divers"] = min(config["max_divers"] + cycle, 10)
+            # Øk nedstegningshastigheten også
+            if "descent_speed_multiplier" in config:
+                config["descent_speed_multiplier"] *= (1.5 ** cycle)
+            
+            # Øk skyting og dykking gradvis
+            config["shoot_chance"] *= (1.2 ** cycle)
+            if "dive_chance" in config and config["dive_chance"] > 0:
+                config["dive_chance"] *= (1.2 ** cycle)
+            
+            # Øk også maks dykkere, men med en øvre grense
+            if "max_divers" in config and config["max_divers"] > 0:
+                config["max_divers"] = min(config["max_divers"] + cycle, 10)
         
         return config
 
@@ -687,6 +705,17 @@ def create_aliens():
         radius = 0
         angle_step = 0.5  # Adjust for tighter/looser spiral
         
+        # Lagre spiralsenterinformasjon for senere bruk ved rotasjon
+        spiral_info = {
+            'center_x': center_x,
+            'center_y': center_y,
+            'current_angle': 0,  # Rotasjonsvinkel for hele formasjonen
+            'movement_phase_x': 0,  # Fase for sirkulær bevegelse
+            'movement_phase_y': math.pi / 2,  # Start 90 grader forskjøvet for y
+            'original_center_x': center_x,
+            'original_center_y': center_y
+        }
+        
         for i in range(config["alien_count"]):
             angle = i * angle_step
             radius = i * config["spiral_spacing"] / 10
@@ -701,9 +730,17 @@ def create_aliens():
                 'diving': False,
                 'dive_speed': DIVE_SPEED,
                 'original_x': x,
-                'can_shoot': i % 3 == 0
+                'original_y': y,  # Lagre original y-posisjon også
+                'can_shoot': i % 3 == 0,
+                'spiral_angle': angle,  # Lagre vinkelen i spiralen
+                'spiral_radius': radius,  # Lagre avstanden fra sentrum
+                'spiral_index': i  # Lagre indeksen i spiralen for varierende effekter
             }
             aliens.append(alien)
+        
+        # Lagre spiralinfo i første alien for enkel tilgang
+        if aliens:
+            aliens[0]['spiral_info'] = spiral_info
     
     elif config["pattern"] == "random":
         # Random scattered formation
@@ -746,6 +783,84 @@ def update_aliens():
     # Hent nedstegningsstørrelse fra nivåkonfigurasjon, med standard fallback
     descent_step = config.get("descent_step", VERTICAL_STEP)
     
+    # Spesialbehandling for spiralnivået med rotasjon
+    if config["pattern"] == "spiral" and config.get("spiral_rotation", False) and aliens:
+        # Hent spiralinfo fra første alien
+        if 'spiral_info' in aliens[0]:
+            spiral_info = aliens[0]['spiral_info']
+            
+            # Oppdater rotasjonsvinkel for hele formasjonen
+            spiral_info['current_angle'] += config.get("rotation_speed", 0.005)
+            
+            # Oppdater bevegelsesposisjon for hele formasjonen
+            if config.get("movement_pattern") == "circular":
+                # Kalkuler ny sentrumsposisjon med sirkelbevegelse
+                spiral_info['movement_phase_x'] += config.get("movement_speed_x", 0.5) / 100
+                spiral_info['movement_phase_y'] += config.get("movement_speed_y", 0.3) / 100
+                
+                # Beregner ny sentrumsposisjon
+                new_center_x = spiral_info['original_center_x'] + math.sin(spiral_info['movement_phase_x']) * config.get("movement_amplitude_x", 100)
+                new_center_y = spiral_info['original_center_y'] + math.sin(spiral_info['movement_phase_y']) * config.get("movement_amplitude_y", 50)
+                
+                # Begrenser hvor langt ned spiralen kan gå
+                if new_center_y > config.get("center_y_limit", 250):
+                    new_center_y = config.get("center_y_limit", 250)
+                
+                # Oppdaterer sentrum
+                spiral_info['center_x'] = new_center_x
+                spiral_info['center_y'] = new_center_y
+            
+            # Oppdater posisjonen til hver alien i spiralformasjonen
+            for alien in aliens:
+                if not alien['diving']:
+                    # Beregn ny posisjon basert på rotert vinkel
+                    rotated_angle = alien['spiral_angle'] + spiral_info['current_angle']
+                    
+                    # Beregn ny posisjon
+                    alien['rect'].x = int(spiral_info['center_x'] + alien['spiral_radius'] * math.cos(rotated_angle))
+                    alien['rect'].y = int(spiral_info['center_y'] + alien['spiral_radius'] * math.sin(rotated_angle))
+                    
+                    # Oppdater original_x for riktig bevegelse av dykkende fiender når de returnerer
+                    alien['original_x'] = alien['rect'].x
+            
+            # Returnerer tidlig for spiralnivået, siden vi allerede har håndtert bevegelsen
+            # Vi må likevel håndtere skyting og dykking
+            for alien in aliens:
+                # Shooting logic for non-diving aliens
+                if not alien['diving'] and alien['can_shoot'] and random.random() < ALIEN_SHOOT_CHANCE:
+                    bullet = pygame.Rect(
+                        alien['rect'].centerx - BULLET_WIDTH // 2,
+                        alien['rect'].bottom,
+                        BULLET_WIDTH,
+                        BULLET_HEIGHT
+                    )
+                    alien_bullets.append(bullet)
+                
+                # Only allow new diver if we're under the maximum and diving is enabled
+                if not alien['diving'] and config.get("dive_chance", 0) > 0:
+                    diving_count = sum(1 for a in aliens if a['diving'])
+                    if diving_count < MAX_DIVERS and random.random() < DIVE_CHANCE:
+                        alien['diving'] = True
+                        diving_count += 1
+                
+                # Håndterer dykkende fiender
+                if alien['diving']:
+                    # Diving movement - combine downward motion with a gentler sine wave
+                    alien['rect'].y += alien['dive_speed']
+                    time_offset = pygame.time.get_ticks() / SWAY_SPEED
+                    sway_x = alien['original_x'] + math.sin(time_offset) * SWAY_AMPLITUDE
+                    alien['rect'].x = sway_x
+                    
+                    # Reset if alien goes off screen
+                    if alien['rect'].top > SCREEN_HEIGHT:
+                        alien['rect'].y = 0
+                        alien['diving'] = False
+                        alien['rect'].x = alien['original_x']
+            
+            # Vi har allerede håndtert alt for spiralen, så vi kan returnere her
+            return
+    
+    # Rest of regular update logic for other levels
     # Check edges before moving
     should_change_direction = False
     
@@ -958,7 +1073,17 @@ def draw_game_elements():
     
     # Draw level info
     level_config = level_configs.get_level(current_level)
-    level_text = font.render(f'Level {current_level}: {level_config["name"]}', True, WHITE)
+    
+    # Beregn syklusnummer (0 for første runde, 1 for andre runde osv.)
+    cycle = (current_level - 1) // level_configs.max_level
+    
+    # Vis syklusinformasjon hvis vi er i en gjentatt syklus
+    if cycle > 0:
+        cycle_info = f"Runde {cycle+1} - "
+    else:
+        cycle_info = ""
+    
+    level_text = font.render(f'Nivå {current_level}: {cycle_info}{level_config["name"]}', True, WHITE)
     level_rect = level_text.get_rect(midtop=(SCREEN_WIDTH/2, 10))
     screen.blit(level_text, level_rect)
 
@@ -974,6 +1099,11 @@ def main():
     game_over = False
     flash_timer = 0
     flash_speed = 15  # Lower number = faster flashing
+    
+    # Variabler for nivåbyttemelding
+    level_change_message = ""
+    level_message_timer = 0
+    level_message_duration = 120  # 2 sekunder ved 60 FPS
 
     while running:
         # Event handling
@@ -1002,6 +1132,21 @@ def main():
                         BULLET_HEIGHT
                     )
                     bullets.append(bullet)
+                
+                # Sjekk om CTRL + nivånummer er trykket for å bytte nivå
+                if (event.key >= pygame.K_1 and event.key <= pygame.K_7) and (pygame.key.get_mods() & pygame.KMOD_CTRL):
+                    # Beregn hvilket nivå som er valgt (K_1 = 49, K_2 = 50, osv.)
+                    requested_level = event.key - pygame.K_0  # Konverterer tastekode til tall (1-7)
+                    
+                    if 1 <= requested_level <= level_configs.max_level:
+                        # Bytt til det valgte nivået
+                        current_level = requested_level
+                        # Tilbakestill alienene for det nye nivået
+                        create_aliens()
+                        # Vis en melding på skjermen om nivåbytte
+                        level_config = level_configs.get_level(current_level)
+                        level_change_message = f"Nivå {current_level}: {level_config['name']}"
+                        level_message_timer = level_message_duration
 
         if not game_over:
             # Player movement
@@ -1116,6 +1261,21 @@ def main():
             draw_game_elements()
             # Draw bonus text on top of everything
             bonus_text.draw(screen)
+            
+            # Vis nivåbytte-melding hvis timeren er aktiv
+            if level_message_timer > 0:
+                # Stor tekst med pulserende effekt
+                level_message_font = pygame.font.Font(None, 72)
+                pulse_alpha = min(255, int(255 * (level_message_timer / level_message_duration) * 1.5))
+                level_text_surface = level_message_font.render(level_change_message, True, (255, 255, 255))
+                level_text_surface.set_alpha(pulse_alpha)
+                
+                # Tegn teksten sentrert på skjermen
+                text_rect = level_text_surface.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT/2 - 100))
+                screen.blit(level_text_surface, text_rect)
+                
+                # Reduser timeren
+                level_message_timer -= 1
         
         pygame.display.flip()
         clock.tick(60)
