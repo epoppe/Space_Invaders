@@ -12,6 +12,12 @@ Et retro Space Invaders-spill bygget med Pygame.
 
 ## Installasjon
 
+### Windows exe-fil (anbefalt)
+1. Last ned [SpaceInvaders.zip](SpaceInvaders.zip)
+2. Pakk ut zip-filen
+3. Kjør SpaceInvaders.exe direkte - ingen installasjon nødvendig!
+
+### Python-installasjon
 1. Sørg for at du har Python 3.x installert
 2. Installer Pygame:
 ```
