@@ -40,4 +40,4 @@ python space_invaders.py
 
 ## Lisens
 
-Dette prosjektet er lisensiert under [MIT License](LICENSE). 
+Dette prosjektet er lisensiert under [MIT License](LICENSE).
