@@ -488,7 +488,8 @@ class LevelConfigs:
                 "speed_multiplier": 1.2,
                 "classic_movement": False,  # Normal bevegelse for andre nivåer
                 "descent_step": 10,
-                "descent_speed_multiplier": 1.0
+                "descent_speed_multiplier": 1.0,
+                "dive_speed_multiplier": 0.8  # 80% av normal dykkehastighet
             },
             # Level 4 - Diamond formation (tidligere level 3)
             {
@@ -508,7 +509,8 @@ class LevelConfigs:
                 "speed_multiplier": 1.4,
                 "classic_movement": False,
                 "descent_step": 10,
-                "descent_speed_multiplier": 1.0
+                "descent_speed_multiplier": 1.0,
+                "dive_speed_multiplier": 0.7  # 70% av normal dykkehastighet
             },
             # Level 5 - Spiral formation (tidligere level 4)
             {
@@ -534,7 +536,8 @@ class LevelConfigs:
                 "movement_speed_y": 0.3,  # Hastighet for vertikal bevegelse
                 "movement_amplitude_x": 100,  # Amplitude for horisontal bevegelse
                 "movement_amplitude_y": 50,  # Amplitude for vertikal bevegelse (mindre enn X for å unngå å gå for langt ned)
-                "center_y_limit": 250  # Begrenser hvor langt ned formasjonen kan gå
+                "center_y_limit": 250,  # Begrenser hvor langt ned formasjonen kan gå
+                "dive_speed_multiplier": 0.65  # 65% av normal dykkehastighet
             },
             # Level 6 - Random scattered formation (tidligere level 5)
             {
@@ -553,7 +556,8 @@ class LevelConfigs:
                 "speed_multiplier": 1.8,
                 "classic_movement": False,
                 "descent_step": 10,
-                "descent_speed_multiplier": 1.0
+                "descent_speed_multiplier": 1.0,
+                "dive_speed_multiplier": 0.6  # Reduserer dykkehastigheten til 60% av normal
             },
             # Level 7 - Enhanced classic (tidligere level 6)
             {
@@ -625,6 +629,9 @@ def create_aliens():
     DIVE_CHANCE = config["dive_chance"]
     MAX_DIVERS = config["max_divers"]
     
+    # Hent dykkehastighets-multiplikator fra config (standard = 1.0)
+    dive_speed_multiplier = config.get("dive_speed_multiplier", 1.0)
+    
     # Create aliens based on the pattern
     if config["pattern"] == "grid":
         # Standard grid formation
@@ -639,7 +646,7 @@ def create_aliens():
                     ),
                     'type': alien_type,
                     'diving': False,
-                    'dive_speed': DIVE_SPEED,
+                    'dive_speed': DIVE_SPEED * dive_speed_multiplier,
                     'original_x': config["start_x"] + col * config["col_spacing"],
                     'can_shoot': col % 4 == 0  # Only every fourth alien can shoot
                 }
@@ -664,7 +671,7 @@ def create_aliens():
                     ),
                     'type': alien_type,
                     'diving': False,
-                    'dive_speed': DIVE_SPEED,
+                    'dive_speed': DIVE_SPEED * dive_speed_multiplier,
                     'original_x': config["start_x"] + col * config["col_spacing"],
                     'can_shoot': col % 3 == 0  # Increased shooting frequency
                 }
@@ -692,7 +699,7 @@ def create_aliens():
                     ),
                     'type': alien_type,
                     'diving': False,
-                    'dive_speed': DIVE_SPEED,
+                    'dive_speed': DIVE_SPEED * dive_speed_multiplier,
                     'original_x': config["start_x"] + col * config["col_spacing"],
                     'can_shoot': (row_offset + col_offset < 2)  # Center aliens shoot more
                 }
@@ -728,7 +735,7 @@ def create_aliens():
                 'rect': pygame.Rect(int(x), int(y), 30, 30),
                 'type': alien_type,
                 'diving': False,
-                'dive_speed': DIVE_SPEED,
+                'dive_speed': DIVE_SPEED * dive_speed_multiplier,
                 'original_x': x,
                 'original_y': y,  # Lagre original y-posisjon også
                 'can_shoot': i % 3 == 0,
@@ -753,12 +760,16 @@ def create_aliens():
                 x = config["start_x"] + random.randint(0, config["width_range"])
                 y = config["start_y"] + random.randint(0, config["height_range"])
             
+            # Beregner individuell dykkehastighet basert på config
+            dive_speed_multiplier = config.get("dive_speed_multiplier", 1.0)
+            actual_dive_speed = DIVE_SPEED * dive_speed_multiplier * (1 + random.random() * 0.3)
+            
             alien_type = random.choice(config["alien_types"])
             alien = {
                 'rect': pygame.Rect(int(x), int(y), 30, 30),
                 'type': alien_type,
                 'diving': False,
-                'dive_speed': DIVE_SPEED * (1 + random.random() * 0.5),  # Randomized dive speed
+                'dive_speed': actual_dive_speed,  # Bruker justert dykkehastighet
                 'original_x': x,
                 'can_shoot': random.random() < 0.25  # 25% chance an alien can shoot
             }
