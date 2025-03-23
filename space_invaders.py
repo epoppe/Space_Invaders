@@ -353,7 +353,7 @@ class BonusText:
         self.duration = 60  # 60 frames = 1 second at 60 FPS
         self.flash_speed = 5  # Lower = faster flashing
         self.points = 500
-        self.font = pygame.font.Font(None, 48)  # Larger font for bonus text
+        self.font = pygame.font.Font(None, 40)  # Redusert fra 48 til 40 for bonus-tekst
         
     def activate(self, x, y):
         self.active = True
@@ -1055,13 +1055,15 @@ stars = [Star() for _ in range(100)]
 clock = pygame.time.Clock()
 score = 0
 high_score = 0
-font = pygame.font.Font(None, 36)
+font = pygame.font.Font(None, 28)  # Redusert fra 36 til 28 for mindre tekstvisning
+hud_font = pygame.font.Font(None, 28)  # Dedikert font for HUD-elementer (score, high score, etc.)
 
 def create_button(text, width=200, height=50):
     surface = pygame.Surface((width, height))
     surface.fill((50, 50, 50))  # Dark gray background
     pygame.draw.rect(surface, WHITE, surface.get_rect(), 2)  # White border
     
+    # Bruk normal font for knapper, ikke den mindre hud_font
     text_surface = font.render(text, True, WHITE)
     text_rect = text_surface.get_rect(center=(width/2, height/2))
     surface.blit(text_surface, text_rect)
@@ -1094,19 +1096,20 @@ def draw_game_elements():
     for particle in particles:
         particle.draw(screen)
 
+    # Tegn score, high score og nivå med mindre tekst og høyere posisjon (y=5 i stedet for y=10)
     # Draw score on left
-    score_text = font.render(f'Score: {score}', True, WHITE)
-    screen.blit(score_text, (10, 10))
+    score_text = hud_font.render(f'Score: {score}', True, WHITE)
+    screen.blit(score_text, (10, 5))
     
     # Draw high score and last score on right
-    high_score_text = font.render(f'High Score: {high_score}', True, WHITE)
-    last_score_text = font.render(f'Last Score: {last_score}', True, WHITE)
+    high_score_text = hud_font.render(f'High Score: {high_score}', True, WHITE)
+    last_score_text = hud_font.render(f'Last Score: {last_score}', True, WHITE)
     
     high_score_rect = high_score_text.get_rect()
     last_score_rect = last_score_text.get_rect()
     
-    high_score_rect.topright = (SCREEN_WIDTH - 10, 10)
-    last_score_rect.topright = (SCREEN_WIDTH - 10, 40)  # Position below high score
+    high_score_rect.topright = (SCREEN_WIDTH - 10, 5)
+    last_score_rect.topright = (SCREEN_WIDTH - 10, 25)  # Redusert avstand fra 40 til 25
     
     screen.blit(high_score_text, high_score_rect)
     screen.blit(last_score_text, last_score_rect)
@@ -1123,8 +1126,8 @@ def draw_game_elements():
     else:
         cycle_info = ""
     
-    level_text = font.render(f'Nivå {current_level}: {cycle_info}{level_config["name"]}', True, WHITE)
-    level_rect = level_text.get_rect(midtop=(SCREEN_WIDTH/2, 10))
+    level_text = hud_font.render(f'Nivå {current_level}: {cycle_info}{level_config["name"]}', True, WHITE)
+    level_rect = level_text.get_rect(midtop=(SCREEN_WIDTH/2, 5))
     screen.blit(level_text, level_rect)
 
 def main():
@@ -1144,6 +1147,7 @@ def main():
     level_change_message = ""
     level_message_timer = 0
     level_message_duration = 120  # 2 sekunder ved 60 FPS
+    level_message_font = pygame.font.Font(None, 60)  # Større font for nivåbyttemelding, men mindre enn før (var 72)
 
     while running:
         # Event handling
@@ -1284,7 +1288,7 @@ def main():
             else:
                 flash_timer = 0
             
-            # Draw game over text
+            # Draw game over text med justert fontstørrelse
             game_over_text = font.render('Game Over! Press Enter to Restart', True, WHITE)
             final_score_text = font.render(f'Final Score: {score}', True, WHITE)
             
@@ -1304,8 +1308,7 @@ def main():
             
             # Vis nivåbytte-melding hvis timeren er aktiv
             if level_message_timer > 0:
-                # Stor tekst med pulserende effekt
-                level_message_font = pygame.font.Font(None, 72)
+                # Bruk en mindre tekst, men fortsatt stor nok til å være synlig
                 pulse_alpha = min(255, int(255 * (level_message_timer / level_message_duration) * 1.5))
                 level_text_surface = level_message_font.render(level_change_message, True, (255, 255, 255))
                 level_text_surface.set_alpha(pulse_alpha)
