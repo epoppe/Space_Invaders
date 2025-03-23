@@ -1,0 +1,3 @@
+"""
+Space Invaders src package
+""" 
