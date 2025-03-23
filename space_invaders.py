@@ -590,21 +590,50 @@ class LevelConfigs:
         # Apply difficulty scaling for repeated levels
         if level_num > self.max_level:
             cycle = (level_num - 1) // self.max_level
-            # Doble hastigheten for hver fullførte syklus (alle 7 nivåer)
-            config["speed_multiplier"] *= (2.0 ** cycle)
+            
+            # Justerte hastighetsmultiplikatorer basert på runde
+            # Runde 1: Nivå 1-7 (cycle 0) - normal hastighet
+            # Runde 2: Nivå 8-14 (cycle 1) - 80% av opprinnelig hastighet
+            # Runde 3+: Nivå 15+ (cycle 2+) - samme hastighet som runde 2 hadde før (2.0^1)
+            if cycle == 1:
+                # Runde 2: Reduserer hastigheten med 20% fra opprinnelig formel
+                config["speed_multiplier"] *= (2.0 ** cycle) * 0.8
+            elif cycle >= 2:
+                # Runde 3+: Bruk samme hastighet som runde 2 hadde før (2.0^1)
+                config["speed_multiplier"] *= 2.0
+            else:
+                # Runde 1: Normal hastighet
+                config["speed_multiplier"] *= (2.0 ** cycle)
             
             # Gjør navnet klarere for gjentatte nivåer
             original_name = config["name"]
             config["name"] = f"{original_name} +{cycle}"
             
-            # Øk nedstegningshastigheten også
+            # Øk nedstegningshastigheten også, med samme justeringer
             if "descent_speed_multiplier" in config:
-                config["descent_speed_multiplier"] *= (1.5 ** cycle)
+                if cycle == 1:
+                    # Runde 2: 80% av opprinnelig nedstegningshastighet
+                    config["descent_speed_multiplier"] *= (1.5 ** cycle) * 0.8
+                elif cycle >= 2:
+                    # Runde 3+: Samme nedstegningshastighet som runde 2 hadde før
+                    config["descent_speed_multiplier"] *= 1.5
+                else:
+                    # Runde 1: Normal nedstegningshastighet
+                    config["descent_speed_multiplier"] *= (1.5 ** cycle)
             
-            # Øk skyting og dykking gradvis
-            config["shoot_chance"] *= (1.2 ** cycle)
-            if "dive_chance" in config and config["dive_chance"] > 0:
-                config["dive_chance"] *= (1.2 ** cycle)
+            # Øk skyting og dykking gradvis, men også med redusert økning for runde 2
+            if cycle == 1:
+                config["shoot_chance"] *= (1.2 ** cycle) * 0.8
+                if "dive_chance" in config and config["dive_chance"] > 0:
+                    config["dive_chance"] *= (1.2 ** cycle) * 0.8
+            elif cycle >= 2:
+                config["shoot_chance"] *= 1.2  # Fast value equivalent to 1.2^1
+                if "dive_chance" in config and config["dive_chance"] > 0:
+                    config["dive_chance"] *= 1.2  # Fast value equivalent to 1.2^1
+            else:
+                config["shoot_chance"] *= (1.2 ** cycle)
+                if "dive_chance" in config and config["dive_chance"] > 0:
+                    config["dive_chance"] *= (1.2 ** cycle)
             
             # Øk også maks dykkere, men med en øvre grense
             if "max_divers" in config and config["max_divers"] > 0:
