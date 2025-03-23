@@ -1,6 +1,8 @@
 import pygame
 import random
 import math
+import os
+import json
 
 # Initialize Pygame
 pygame.init()
@@ -1130,6 +1132,172 @@ def draw_game_elements():
     level_rect = level_text.get_rect(midtop=(SCREEN_WIDTH/2, 5))
     screen.blit(level_text, level_rect)
 
+# Highscore-system
+class HighscoreManager:
+    def __init__(self):
+        self.highscores = []
+        self.filename = "highscores.json"
+        self.max_entries = 10
+        self.load_highscores()
+    
+    def load_highscores(self):
+        try:
+            if os.path.exists(self.filename):
+                with open(self.filename, 'r') as f:
+                    self.highscores = json.load(f)
+        except:
+            # Hvis filen ikke kan lastes, bruk en tom liste
+            self.highscores = []
+    
+    def save_highscores(self):
+        try:
+            with open(self.filename, 'w') as f:
+                json.dump(self.highscores, f)
+        except Exception as e:
+            print(f"Kunne ikke lagre highscores: {e}")
+    
+    def add_score(self, initials, score):
+        # Legg til ny score
+        new_entry = {"initials": initials, "score": score}
+        
+        # Sjekk om denne initial-kombinasjonen allerede finnes
+        existing_entry = next((entry for entry in self.highscores if entry["initials"] == initials), None)
+        
+        if existing_entry:
+            # Oppdater kun hvis ny score er høyere
+            if score > existing_entry["score"]:
+                existing_entry["score"] = score
+        else:
+            # Legg til ny entry
+            self.highscores.append(new_entry)
+        
+        # Sorter listen etter score (høyest først)
+        self.highscores.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Behold bare de N beste
+        if len(self.highscores) > self.max_entries:
+            self.highscores = self.highscores[:self.max_entries]
+        
+        # Lagre til fil
+        self.save_highscores()
+    
+    def get_highscores(self):
+        return self.highscores
+
+# Lag en instans av highscore-manageren
+highscore_manager = HighscoreManager()
+
+def draw_text_input_screen(screen, initials, cursor_pos):
+    # Tegn bakgrunn
+    screen.fill(BLACK)
+    
+    # Tegn tittel
+    title_font = pygame.font.Font(None, 60)
+    title_text = title_font.render("NY HIGH SCORE!", True, (255, 255, 0))
+    title_rect = title_text.get_rect(center=(SCREEN_WIDTH/2, 150))
+    screen.blit(title_text, title_rect)
+    
+    # Tegn instruksjoner
+    instruction_font = pygame.font.Font(None, 30)
+    instruction_text = instruction_font.render("Skriv inn dine initialer (3 bokstaver)", True, WHITE)
+    instruction_rect = instruction_text.get_rect(center=(SCREEN_WIDTH/2, 220))
+    screen.blit(instruction_text, instruction_rect)
+    
+    # Tegn initialene med markør
+    initial_font = pygame.font.Font(None, 80)
+    
+    # Tegn en boks for hver initial
+    for i in range(3):
+        # Beregn posisjon
+        box_x = SCREEN_WIDTH/2 - 80 + i * 70
+        box_y = 300
+        
+        # Tegn boks
+        pygame.draw.rect(screen, WHITE, (box_x, box_y, 60, 80), 2)
+        
+        # Tegn bokstav hvis den finnes
+        if i < len(initials):
+            letter_text = initial_font.render(initials[i], True, WHITE)
+            letter_rect = letter_text.get_rect(center=(box_x + 30, box_y + 40))
+            screen.blit(letter_text, letter_rect)
+        
+        # Tegn markør
+        if i == cursor_pos and pygame.time.get_ticks() % 1000 < 500:
+            cursor_y = box_y + 15
+            pygame.draw.line(screen, WHITE, (box_x + 30, cursor_y), (box_x + 30, cursor_y + 50), 2)
+    
+    # Tegn enter-instruksjon hvis alle initialer er angitt
+    if len(initials) == 3:
+        enter_text = instruction_font.render("Trykk ENTER for å fortsette", True, WHITE)
+        enter_rect = enter_text.get_rect(center=(SCREEN_WIDTH/2, 420))
+        screen.blit(enter_text, enter_rect)
+
+def draw_highscore_list(screen):
+    """Viser highscorelisten på skjermen"""
+    screen.fill(BLACK)
+    
+    # Tegn tittel
+    title_font = pygame.font.Font(None, 60)
+    title_text = title_font.render("HIGHSCORES", True, (255, 255, 0))
+    title_rect = title_text.get_rect(center=(SCREEN_WIDTH/2, 100))
+    screen.blit(title_text, title_rect)
+    
+    # Tegn listen
+    highscores = highscore_manager.get_highscores()
+    entry_font = pygame.font.Font(None, 36)
+    y_pos = 180
+    
+    if not highscores:
+        # Hvis ingen highscores finnes
+        no_scores_text = entry_font.render("Ingen scores registrert ennå", True, WHITE)
+        no_scores_rect = no_scores_text.get_rect(center=(SCREEN_WIDTH/2, y_pos))
+        screen.blit(no_scores_text, no_scores_rect)
+    else:
+        # Tegn overskrifter
+        header_font = pygame.font.Font(None, 36)
+        rank_text = header_font.render("PLASS", True, (255, 200, 0))
+        initials_text = header_font.render("NAVN", True, (255, 200, 0))
+        score_text = header_font.render("POENG", True, (255, 200, 0))
+        
+        screen.blit(rank_text, (SCREEN_WIDTH/2 - 200, y_pos))
+        screen.blit(initials_text, (SCREEN_WIDTH/2 - 50, y_pos))
+        screen.blit(score_text, (SCREEN_WIDTH/2 + 120, y_pos))
+        
+        y_pos += 40
+        
+        # Tegn hver entry
+        for i, entry in enumerate(highscores):
+            # Alternerende farger for radene
+            row_color = WHITE if i % 2 == 0 else (200, 200, 200)
+            
+            # Rangering
+            rank_str = f"{i+1}."
+            rank_text = entry_font.render(rank_str, True, row_color)
+            screen.blit(rank_text, (SCREEN_WIDTH/2 - 200, y_pos))
+            
+            # Initialer
+            initials_text = entry_font.render(entry["initials"], True, row_color)
+            screen.blit(initials_text, (SCREEN_WIDTH/2 - 50, y_pos))
+            
+            # Score
+            score_text = entry_font.render(str(entry["score"]), True, row_color)
+            score_rect = score_text.get_rect()
+            score_rect.right = SCREEN_WIDTH/2 + 180
+            score_rect.top = y_pos
+            screen.blit(score_text, score_rect)
+            
+            y_pos += 35
+            
+            # Ikke vis for mange på skjermen
+            if i >= 9:  # Vis maksimalt 10 entries
+                break
+    
+    # Tegn instruksjon nederst
+    instruction_font = pygame.font.Font(None, 30)
+    instruction_text = instruction_font.render("Trykk ENTER for å starte nytt spill", True, WHITE)
+    instruction_rect = instruction_text.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT - 100))
+    screen.blit(instruction_text, instruction_rect)
+
 def main():
     global player_x, score, alien_direction, animation_frame, animation_counter, high_score, current_wave, current_level, fireworks, explosion_particles
 
@@ -1157,6 +1325,19 @@ def main():
     explosion_particles = []  # Separate liste for eksplosjonspartikler
     firework_timer = 0
     high_score_font = pygame.font.Font(None, 80)  # Ekstra stor font for high score-feiring
+    
+    # Variabler for highscore-registrering
+    entering_initials = False
+    initials = ""  # Sørg for at initialene starter tomt
+    initial_cursor_pos = 0
+    
+    # Variabel for highscore-liste
+    showing_highscores = False
+    
+    # Gjennomfør en ny high score-sjekk ved oppstart
+    highscore_manager.load_highscores()
+    if highscore_manager.get_highscores():
+        high_score = max(entry["score"] for entry in highscore_manager.get_highscores())
 
     while running:
         # Event handling
@@ -1164,19 +1345,55 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             
-            if game_over:
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    mouse_pos = pygame.mouse.get_pos()
-                    if button_rect.collidepoint(mouse_pos):
-                        game_over = False
-                        reset_game()
-                        player_x = SCREEN_WIDTH // 2
-                        celebrating_high_score = False  # Stopp feiring ved restart
-                elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+            if entering_initials:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN and len(initials) == 3:
+                        # Lagre initialer og score
+                        highscore_manager.add_score(initials, score)
+                        entering_initials = False
+                        showing_highscores = True
+                    elif event.key == pygame.K_BACKSPACE and len(initials) > 0:
+                        # Slett siste bokstav
+                        initials = initials[:-1]
+                        initial_cursor_pos = len(initials)
+                    elif len(initials) < 3:
+                        # Legg til bokstaver (kun A-Z tillatt)
+                        if event.unicode.isalpha():
+                            initials += event.unicode.upper()
+                            initial_cursor_pos = len(initials)
+            
+            elif showing_highscores:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                    # Start nytt spill
+                    showing_highscores = False
                     game_over = False
                     reset_game()
                     player_x = SCREEN_WIDTH // 2
-                    celebrating_high_score = False  # Stopp feiring ved restart
+                    celebrating_high_score = False
+                    initials = ""  # Tøm initialer når et nytt spill starter
+                    initial_cursor_pos = 0
+            
+            elif game_over:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    mouse_pos = pygame.mouse.get_pos()
+                    if button_rect.collidepoint(mouse_pos) and not celebrating_high_score:
+                        if score > high_score:
+                            # Start highscore-registrering
+                            entering_initials = True
+                            initials = ""  # Tøm initialer når det er tid for å registrere ny high score
+                            initial_cursor_pos = 0
+                        else:
+                            # Start highscore-visning
+                            showing_highscores = True
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and not celebrating_high_score:
+                    if score > high_score:
+                        # Start highscore-registrering
+                        entering_initials = True
+                        initials = ""  # Tøm initialer når det er tid for å registrere ny high score
+                        initial_cursor_pos = 0
+                    else:
+                        # Start highscore-visning
+                        showing_highscores = True
             
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
@@ -1203,6 +1420,20 @@ def main():
                         level_change_message = f"Nivå {current_level}: {level_config['name']}"
                         level_message_timer = level_message_duration
 
+        # Håndter visning av high score-liste
+        if showing_highscores:
+            draw_highscore_list(screen)
+            pygame.display.flip()
+            clock.tick(60)
+            continue
+        
+        # Håndter registrering av initialer
+        if entering_initials:
+            draw_text_input_screen(screen, initials, initial_cursor_pos)
+            pygame.display.flip()
+            clock.tick(60)
+            continue
+        
         if not game_over:
             # Player movement
             keys = pygame.key.get_pressed()
@@ -1321,8 +1552,9 @@ def main():
                        (SCREEN_WIDTH//2 - final_score_text.get_width()//2,
                         SCREEN_HEIGHT//2))
             
-            # Draw restart button
-            screen.blit(restart_button, button_rect)
+            # Draw restart button (bare hvis ikke feiringen er aktiv)
+            if not celebrating_high_score:
+                screen.blit(restart_button, button_rect)
             
             # Vis high score-feiring hvis aktivert
             if celebrating_high_score:
@@ -1366,6 +1598,10 @@ def main():
                     celebrating_high_score = False
                     fireworks.clear()  # Fjern alle raketter
                     explosion_particles.clear()  # Fjern alle eksplosjonspartikler
+                    # Start registrering av initialer
+                    entering_initials = True
+                    initials = ""  # Tøm initialer når det er tid for å registrere ny high score
+                    initial_cursor_pos = 0  # Nullstill markørposisjonen
         else:
             draw_game_elements()
             # Draw bonus text on top of everything
@@ -1388,16 +1624,23 @@ def main():
         pygame.display.flip()
         clock.tick(60)
 
+    # Lagre high scores før spillet avsluttes
+    highscore_manager.save_highscores()
     pygame.quit()
 
 def reset_game():
-    global score, aliens, bullets, alien_bullets, particles, alien_direction, current_wave, last_score, current_level, fireworks, celebrating_high_score, celebration_timer, explosion_particles
+    global score, aliens, bullets, alien_bullets, particles, alien_direction, current_wave, last_score, current_level, fireworks, celebrating_high_score, celebration_timer, explosion_particles, entering_initials, initials, initial_cursor_pos
     
     # Nullstill alle fyrverkeri-relaterte variabler
     fireworks = []
     explosion_particles = []  # Sørg for at også eksplosjonspartiklene nullstilles
     celebrating_high_score = False
     celebration_timer = 0
+    
+    # Nullstill initialer-relaterte variabler
+    entering_initials = False
+    initials = ""
+    initial_cursor_pos = 0
     
     last_score = score  # Store last score before resetting
     score = 0
