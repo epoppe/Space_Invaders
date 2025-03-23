@@ -1131,7 +1131,7 @@ def draw_game_elements():
     screen.blit(level_text, level_rect)
 
 def main():
-    global player_x, score, alien_direction, animation_frame, animation_counter, high_score, current_wave, current_level
+    global player_x, score, alien_direction, animation_frame, animation_counter, high_score, current_wave, current_level, fireworks, explosion_particles
 
     # Create restart button
     restart_button = create_button("Play Again")
@@ -1148,6 +1148,15 @@ def main():
     level_message_timer = 0
     level_message_duration = 120  # 2 sekunder ved 60 FPS
     level_message_font = pygame.font.Font(None, 60)  # Større font for nivåbyttemelding, men mindre enn før (var 72)
+    
+    # Variabler for high score-feiring
+    celebrating_high_score = False
+    celebration_timer = 0
+    celebration_duration = 240  # 4 sekunder ved 60 FPS
+    fireworks = []  # Raketter
+    explosion_particles = []  # Separate liste for eksplosjonspartikler
+    firework_timer = 0
+    high_score_font = pygame.font.Font(None, 80)  # Ekstra stor font for high score-feiring
 
     while running:
         # Event handling
@@ -1162,10 +1171,12 @@ def main():
                         game_over = False
                         reset_game()
                         player_x = SCREEN_WIDTH // 2
+                        celebrating_high_score = False  # Stopp feiring ved restart
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
                     game_over = False
                     reset_game()
                     player_x = SCREEN_WIDTH // 2
+                    celebrating_high_score = False  # Stopp feiring ved restart
             
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
@@ -1252,8 +1263,8 @@ def main():
 
                 for alien in aliens[:]:
                     if bullet.colliderect(alien['rect']):
-                        create_explosion(alien['rect'].centerx, alien['rect'].centery,
-                                      alien_sprites[alien['type']][0].get_at((0, 0)))
+                        # Bruk NEON_RED fargen for alle eksplosjoner når en alien treffes
+                        create_explosion(alien['rect'].centerx, alien['rect'].centery, NEON_RED)
                         if bullet in bullets:
                             bullets.remove(bullet)
                         aliens.remove(alien)
@@ -1276,7 +1287,18 @@ def main():
         screen.fill(BLACK)
         
         if game_over:
-            # Update high score when game ends
+            # Sjekk om vi har oppnådd ny high score
+            if score > high_score:
+                # Nullstill tidligere fyrverkeri helt før vi starter ny feiring
+                fireworks.clear()
+                
+                celebrating_high_score = True
+                celebration_timer = celebration_duration
+                # Lag noen fyrverkerier med det samme (maksimalt 5)
+                for _ in range(5):
+                    fireworks.append(create_firework())
+            
+            # Oppdater high score etter sjekken
             high_score = max(high_score, score)
             
             # Flashing effect
@@ -1301,6 +1323,49 @@ def main():
             
             # Draw restart button
             screen.blit(restart_button, button_rect)
+            
+            # Vis high score-feiring hvis aktivert
+            if celebrating_high_score:
+                # Håndter fyrverkeri
+                firework_timer += 1
+                # Begrens til kun 5 raketter totalt
+                if firework_timer >= 15 and len(fireworks) < 5:  # Opprett nye raketter med jevne mellomrom, maks 5
+                    fireworks.append(create_firework())
+                    firework_timer = 0
+                
+                # Oppdater raketter
+                for fw in fireworks[:]:
+                    if not fw.update():  # Raketten er klar til å eksplodere
+                        # Lag en eksplosjon på rakettens posisjon
+                        explosion_particles.extend(create_firework_explosion(fw.x, fw.y, fw.color))
+                        fireworks.remove(fw)
+                
+                # Oppdater eksplosjonspartikler
+                explosion_particles[:] = [p for p in explosion_particles if p.update()]
+                
+                # Tegn alle fyrverkerieffekter
+                for fw in fireworks:
+                    fw.draw(screen)
+                for ep in explosion_particles:
+                    ep.draw(screen)
+                
+                # Tegn high score-tekst som pulserer
+                pulse_scale = 1.0 + 0.1 * math.sin(pygame.time.get_ticks() / 200)
+                
+                # Stor gul tekst som feirer ny high score
+                hs_text = high_score_font.render('NY HIGH SCORE!', True, (255, 255, 0))
+                hs_text_width = hs_text.get_width() * pulse_scale
+                hs_text_height = hs_text.get_height() * pulse_scale
+                hs_text_scaled = pygame.transform.scale(hs_text, (int(hs_text_width), int(hs_text_height)))
+                hs_rect = hs_text_scaled.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT/2 - 150))
+                screen.blit(hs_text_scaled, hs_rect)
+                
+                # Reduser feiringstiden
+                celebration_timer -= 1
+                if celebration_timer <= 0:
+                    celebrating_high_score = False
+                    fireworks.clear()  # Fjern alle raketter
+                    explosion_particles.clear()  # Fjern alle eksplosjonspartikler
         else:
             draw_game_elements()
             # Draw bonus text on top of everything
@@ -1326,7 +1391,14 @@ def main():
     pygame.quit()
 
 def reset_game():
-    global score, aliens, bullets, alien_bullets, particles, alien_direction, current_wave, last_score, current_level
+    global score, aliens, bullets, alien_bullets, particles, alien_direction, current_wave, last_score, current_level, fireworks, celebrating_high_score, celebration_timer, explosion_particles
+    
+    # Nullstill alle fyrverkeri-relaterte variabler
+    fireworks = []
+    explosion_particles = []  # Sørg for at også eksplosjonspartiklene nullstilles
+    celebrating_high_score = False
+    celebration_timer = 0
+    
     last_score = score  # Store last score before resetting
     score = 0
     aliens = []
@@ -1376,6 +1448,93 @@ class Particle:
         
         # Tegn hovedpartikkel
         pygame.draw.circle(surface, self.color, (int(self.x), int(self.y)), int(self.size))
+
+class FireworkParticle(Particle):
+    def __init__(self, x, y, color, is_rocket=False):
+        super().__init__(x, y, color)
+        self.is_rocket = is_rocket
+        
+        if is_rocket:
+            # Raketter går oppover med mindre spredning
+            angle = random.uniform(math.pi/2 - 0.3, math.pi/2 + 0.3)  # Hovedsakelig oppover
+            speed = random.uniform(5, 8)  # Raskere enn vanlige partikler
+            self.dx = math.cos(angle) * speed
+            self.dy = -math.sin(angle) * speed  # Negativ for å gå oppover
+            self.explode_time = random.randint(20, 35)
+            self.has_exploded = False
+            self.size = random.randint(3, 5)  # Større partikler for raketter
+            self.trail = []  # Lagrer posisjoner for å tegne halen
+            self.max_trail_length = 10
+            self.color = random.choice([(255, 50, 50), (50, 255, 50), (50, 50, 255), 
+                                       (255, 255, 50), (255, 50, 255), (50, 255, 255)])
+        else:
+            # Eksplosjonspartikler sprenger i alle retninger
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(1, 4)
+            self.dx = math.cos(angle) * speed
+            self.dy = math.sin(angle) * speed
+            self.lifetime = random.randint(40, 80)  # Lengre levetid for eksplosjoner
+            self.color = color  # Bruk fargen fra raketten
+
+    def update(self):
+        # Lagre gjeldende posisjon for rakettens hale
+        if self.is_rocket:
+            self.trail.append((self.x, self.y))
+            if len(self.trail) > self.max_trail_length:
+                self.trail.pop(0)
+                
+            # Sjekk om raketten skal eksplodere
+            self.explode_time -= 1
+            if self.explode_time <= 0 and not self.has_exploded:
+                self.has_exploded = True
+                return False  # Fjern raketten og la kaller-koden lage eksplosjonen
+                
+        # Bevegelse med gravitasjonseffekt for eksplosjonspartikler
+        if not self.is_rocket:
+            self.dy += 0.05  # Legg til litt tyngdekraft for eksplosjoner
+            
+        self.x += self.dx
+        self.y += self.dy
+        self.lifetime -= 1
+        
+        # Reduser størrelsen gradvis
+        self.size = max(0, self.size - 0.05)
+        if self.glow:
+            self.glow_size = max(0, self.glow_size - 0.1)
+            self.glow_alpha = max(0, self.glow_alpha - 2)
+            
+        return self.lifetime > 0 if not self.is_rocket else not self.has_exploded
+
+    def draw(self, surface):
+        # Tegn raketthale hvis det er en rakett
+        if self.is_rocket and len(self.trail) > 2:
+            for i in range(len(self.trail) - 1):
+                pos1 = (int(self.trail[i][0]), int(self.trail[i][1]))
+                pos2 = (int(self.trail[i+1][0]), int(self.trail[i+1][1]))
+                
+                # Gjør halen tynnere og mer transparent jo lenger bak den er
+                alpha = int(255 * (i / len(self.trail)))
+                trail_color = (*self.color[:3], alpha)
+                
+                # Tegn halesegmentet
+                if i > 0:  # Skip første punktet for å unngå artefakter
+                    pygame.draw.line(surface, trail_color, pos1, pos2, 2)
+        
+        # Tegn selve partikkelen som i originalklassen
+        super().draw(surface)
+
+def create_firework():
+    """Lager en fyrverkeri-rakett som starter fra bunnen av skjermen"""
+    x = random.randint(50, SCREEN_WIDTH - 50)
+    y = SCREEN_HEIGHT
+    return FireworkParticle(x, y, (255, 255, 255), is_rocket=True)
+
+def create_firework_explosion(x, y, color):
+    """Lager en eksplosjon av partikler ved angitt posisjon med angitt farge"""
+    particles = []
+    for _ in range(50):  # Mer partikler for et kraftigere fyrverkeri
+        particles.append(FireworkParticle(x, y, color))
+    return particles
 
 if __name__ == '__main__':
     main()
